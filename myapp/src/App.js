@@ -5,6 +5,7 @@ import './App.css';
 
 import { listTalks as LIST_TALKS } from './graphql/queries';
 import { createTalk as CREATE_TALK } from './graphql/mutations';
+import { onCreateTalk as OnCreateTalks } from './graphql/subscriptions';
 import { API, graphqlOperation } from 'aws-amplify';
 const CLIENT_ID = uuid();
 
@@ -20,6 +21,7 @@ const SET_TALKS = 'SET_TALKS';
 const SET_INPUT = 'SET_INPUT';
 const CLEAR_INPUT = 'CLEAR_INPUT';
 const SET_ERROR = 'SET_ERROR';
+const ADD_TALK = 'ADD_TALK';
 
 function reducer(state, action) {
 	switch (action.type) {
@@ -40,6 +42,11 @@ function reducer(state, action) {
 			};
 		case CLEAR_INPUT:
 			return { ...initialsState, talks: state.talks };
+		case ADD_TALK:
+			return {
+				...state,
+				talks: [ ...state.talks, action.talk ]
+			};
 		default:
 			return state;
 	}
