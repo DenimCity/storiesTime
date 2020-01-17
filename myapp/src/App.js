@@ -1,11 +1,13 @@
 import React, { useEffect, useReducer } from 'react';
 import uuid from 'uuid/v4';
+import { withAuthenticator } from 'aws-amplify-react';
 
 import './App.css';
 
 import { listTalks as LIST_TALKS } from './graphql/queries';
 import { createTalk as CREATE_TALK } from './graphql/mutations';
-import { onCreateTalk as OnCreateTalks } from './graphql/subscriptions';
+import { deleteTalk as DeleteTalk } from './graphql/mutations';
+import { onCreateTalk } from './graphql/subscriptions';
 import { API, graphqlOperation } from 'aws-amplify';
 const CLIENT_ID = uuid();
 
@@ -22,6 +24,7 @@ const SET_INPUT = 'SET_INPUT';
 const CLEAR_INPUT = 'CLEAR_INPUT';
 const SET_ERROR = 'SET_ERROR';
 const ADD_TALK = 'ADD_TALK';
+const REMOVE_TALK = 'REMOVE_TALK';
 
 function reducer(state, action) {
 	switch (action.type) {
@@ -30,6 +33,12 @@ function reducer(state, action) {
 				...state,
 				talks: action.talks
 			};
+		case REMOVE_TALK: {
+			return {
+				...state,
+				talks: [ ...state.talks ].filter((k) => k.id !== action.talkId)
+			};
+		}
 		case SET_ERROR:
 			return {
 				...state,
@@ -56,7 +65,29 @@ function App() {
 
 	useEffect(() => {
 		getData();
+		const subscription = API.graphql(graphqlOperation(onCreateTalk)).subscribe({
+			next: (eventData) => {
+				console.log('TCL: App -> eventData', eventData);
+				const talk = eventData.value.data.onCreateTalk;
+				if (talk.clientId === CLIENT_ID) return;
+				dispatch({ type: ADD_TALK, talk });
+			}
+		});
+
+		console.log('TCL: App -> subscription', subscription);
+		return () => subscription.unsubscribe();
 	}, []);
+
+	const deleteTalk = async (id) => {
+		try {
+			const data = await API.graphql(graphqlOperation(DeleteTalk, { input: { id } }));
+			console.log('TCL: deleteTalk -> data', data);
+
+			dispatch({ type: REMOVE_TALK, talkId: id });
+		} catch (error) {
+			console.log('TCL: deleteTalk -> error', error.message);
+		}
+	};
 
 	const createTalk = async () => {
 		const { name, description, speakerName, speakerBio } = state;
@@ -72,9 +103,9 @@ function App() {
 
 		try {
 			const res = await API.graphql(graphqlOperation(CREATE_TALK, { input: newTalk }));
-			console.log('TCL: createTalk -> res', res);
+			console.log('TCL: CREATE_TALK -> res', res.data.createTalk);
 		} catch (error) {
-			console.log('TCL: createTalk -> error', error);
+			console.log('TCL: CREATE_TALK -> error', error);
 		}
 	};
 
@@ -96,7 +127,7 @@ function App() {
 
 	return (
 		<div className="App">
-			<div style={{ display: 'flex', flexDirection: 'column', width: '10vw' }}>
+			<div style={{ display: 'flex', flexDirection: 'column', width: '10vw', flexWrap: 'wrap' }}>
 				<input
 					name="name"
 					label="Name"
@@ -132,14 +163,14 @@ function App() {
 				/>
 				<button onClick={() => createTalk()}>Create Talk</button>
 			</div>
-			<div style={{ display: 'flex', justifyContent: 'center', alignContent: 'center' }}>
+			<div style={{ width: '60vw', display: 'flex', justifyContent: 'center', alignContent: 'center' }}>
 				{state.talks.map((talk, index) => {
 					return (
 						<div key={`${index}-${talk.id}`}>
 							<h3>{talk.name}</h3>
 							<h3>{talk.description}</h3>
 							<h3>{talk.speakerName}</h3>
-							<button style={{ backgroundColor: '#f65a5f' }} onClick={() => console.log(talk.id)}>
+							<button style={{ backgroundColor: '#f65a5f' }} onClick={() => deleteTalk(talk.id)}>
 								DELETE
 							</button>
 						</div>
@@ -150,4 +181,4 @@ function App() {
 	);
 }
 
-export default App;
+export default withAuthenticator(App, { includeGreetings: true });
